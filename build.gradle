@@ -4,11 +4,52 @@
  * This is a general purpose Gradle build.
  * Learn how to create Gradle builds at https://guides.gradle.org/creating-new-gradle-builds
  */
+apply plugin:'groovy'
 
-task testLibCmd {
-    doFirst {
-        println 'groovy -cp out/production/InfectStatistic test/src/TestLibCmd list -date 2020-01-22 -out D:/output.txt -province 福建 浙江'
-                .execute().text
+// 修改源码目录
+sourceSets {
+    main {
+        groovy {
+            srcDirs = ['src']
+        }
+    }
+    test {
+        groovy {
+            srcDirs = ['test/src']
+        }
+        resources {
+            srcDirs 'case'
+        }
     }
 }
 
+//修改输出目录
+buildDir = 'out'
+
+// 本地 => 阿里源
+repositories {
+    mavenLocal()
+    maven { url 'http://maven.aliyun.com/nexus/content/repositories/central/' }
+}
+
+// 使用groovy开发需导入
+dependencies {
+    compile 'org.codehaus.groovy:groovy-all:2.5.8'
+}
+
+// 自定义测试任务
+task testLibCmdArgs(dependsOn: [compileGroovy, compileTestGroovy]) {
+    group = 'my'
+    description = 'test lib CmdArgs.'
+
+    doFirst {
+        String sh = 'groovy -cp out/classes/groovy/main;out/classes/groovy/test; ' +
+                'test/src/TestLibCmdArgs ' +
+                'list -date 2020-01-22 -out D:/output.txt -province 福建 浙江'
+        Process process = sh.execute()
+        logger.log LogLevel.ERROR, process.err.getText('gbk')
+        logger.info "testLibCmd output:\n ${process.in.getText('gbk')}"
+    }
+}
+
+test.dependsOn testLibCmdArgs

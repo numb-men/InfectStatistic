@@ -1,10 +1,15 @@
 import java.util.regex.Pattern
 
+/**
+ * InfectStatistic.groovy：解耦的日志处理类、Main调用
+ * @author hengyumo
+ * @since 2020-01-31
+ */
 
 /**
- * 单个命令执行器
+ * 某种类型的日志的处理器
  */
-class CommandHandle {
+class LogHandle {
     Pattern reg
     Closure handleFunc
 
@@ -13,7 +18,7 @@ class CommandHandle {
      * @param aReg
      * @return
      */
-    CommandHandle withReg(Pattern aReg) {
+    LogHandle withReg(Pattern aReg) {
         reg = aReg
         this
     }
@@ -22,30 +27,30 @@ class CommandHandle {
      * 设置闭包，链式调用
      * @param aFunc{ date, group -> }* @return
      */
-    CommandHandle withHandle(aFunc) {
+    LogHandle withHandle(aFunc) {
         handleFunc = aFunc
         this
     }
 }
 
 /**
- * 命令总执行器
+ * 日志总执行器
  */
 @Singleton
-class CommandHandles {
+class LogsHandle {
 
     /**
-     * 命令执行器集合，大小默认初始化为8
+     * 日志执行器集合，大小默认初始化为8
      */
-    def handles = new HashMap<String, CommandHandle>(8)
+    def handles = new HashMap<String, LogHandle>(8)
 
     /**
      * 构造命令
      * @param name
      * @return
      */
-    CommandHandle addHandle(name) {
-        CommandHandle commandHandle = new CommandHandle()
+    LogHandle addHandle(name) {
+        LogHandle commandHandle = new LogHandle()
         handles.put(name, commandHandle)
         commandHandle
     }
@@ -67,100 +72,119 @@ class CommandHandles {
     }
 }
 
-def pdLog = { name, date ->
-    ProvinceMap.instance.getOrCreateProvinceLogs(name, date)
+class InfectStat {
+
+    static def pdLog(name, date) {
+        ProvinceMap.instance.getOrCreateProvinceDailyLog(name, date)
+    }
+
+    /**
+     * 扩展日志类型
+     * @return
+     */
+    static def extend() {
+        LogsHandle.instance.addHandle('IIP')
+                .withReg(~/(\S+) 新增 感染患者 (\d+)人/)
+                .withHandle({ Date date, group ->
+                    ProvinceDailyLog p = pdLog(group[1], date)
+                    int iip = group[2] as int
+                    p.iip += iip
+                    p.ip += iip
+                })
+
+        LogsHandle.instance.addHandle('ISP')
+                .withReg(~/(\S+) 新增 疑似患者 (\d+)人/)
+                .withHandle({ date, group ->
+                    ProvinceDailyLog p = pdLog(group[1], date)
+                    int isp = group[2] as int
+                    p.isp += isp
+                    p.sp += isp
+                })
+
+        LogsHandle.instance.addHandle('FIP')
+                .withReg(~/(\S+) 感染患者 流入 (\S+) (\d+)人/)
+                .withHandle({ date, group ->
+                    ProvinceDailyLog p1 = pdLog(group[1], date)
+                    ProvinceDailyLog p2 = pdLog(group[2], date)
+                    int fip = group[3] as int
+                    p1.iip -= fip
+                    p1.ip -= fip
+                    p2.iip += fip
+                    p2.ip += fip
+                })
+
+        LogsHandle.instance.addHandle('FSP')
+                .withReg(~/(\S+) 疑似患者 流入 (\S+) (\d+)人/)
+                .withHandle({ date, group ->
+                    ProvinceDailyLog p1 = pdLog(group[1], date)
+                    ProvinceDailyLog p2 = pdLog(group[2], date)
+                    int fsp = group[3] as int
+                    p1.isp -= fsp
+                    p1.sp -= fsp
+                    p2.isp += fsp
+                    p2.sp += fsp
+                })
+
+        LogsHandle.instance.addHandle('DEAD')
+                .withReg(~/(\S+) 死亡 (\d+)人/)
+                .withHandle({ date, group ->
+                    ProvinceDailyLog p = pdLog(group[1], date)
+                    int dead = group[2] as int
+                    p.ip -= dead
+                    p.dead += dead
+                    p.idead += dead
+                })
+
+        LogsHandle.instance.addHandle('CURE')
+                .withReg(~/(\S+) 治愈 (\d+)人/)
+                .withHandle({ date, group ->
+                    ProvinceDailyLog p = pdLog(group[1], date)
+                    int cure = group[2] as int
+                    p.ip -= cure
+                    p.cure += cure
+                    p.icure += cure
+                })
+
+        LogsHandle.instance.addHandle('CSP')
+                .withReg(~/(\S+) 疑似患者 确诊感染 (\d+)人/)
+                .withHandle({ date, group ->
+                    ProvinceDailyLog p = pdLog(group[1], date)
+                    int csp = group[2] as int
+                    p.csp += csp
+                    p.sp -= csp
+                    p.isp -= csp
+                    p.iip += csp
+                    p.ip += csp
+                })
+
+        LogsHandle.instance.addHandle('ESP')
+                .withReg(~/(\S+) 排除 疑似患者 (\d+)人/)
+                .withHandle({ date, group ->
+                    ProvinceDailyLog p = pdLog(group[1], date)
+                    int esp = group[2] as int
+                    p.esp += esp
+                    p.sp -= esp
+                    p.isp -= esp
+                })
+
+    }
+
+    /**
+     * 处理日志
+     * @return
+     */
+    static def handleLogs() {
+        def logs = Logs.readFrom('../log')
+
+        logs.eachLogLine { date, line ->
+            LogsHandle.instance.handle(date, line)
+        }
+    }
+
 }
 
-// 易扩展
-CommandHandles.instance.addHandle('IIP')
-        .withReg(~/(\S+) 新增 感染患者 (\d+)人/)
-        .withHandle({ Date date, group ->
-            ProvinceDailyLog p = pdLog(group[1], date)
-            int iip = group[2] as int
-            p.iip += iip
-            p.ip += iip
-        })
+// --------------- 主程序 -------------------
 
-CommandHandles.instance.addHandle('ISP')
-        .withReg(~/(\S+) 新增 疑似患者 (\d+)人/)
-        .withHandle({ date, group ->
-            ProvinceDailyLog p = pdLog(group[1], date)
-            int isp = group[2] as int
-            p.isp += isp
-            p.sp += isp
-        })
-
-CommandHandles.instance.addHandle('FIP')
-        .withReg(~/(\S+) 流入 感染患者 (\S+) (\d+)人/)
-        .withHandle({ date, group ->
-            ProvinceDailyLog p1 = pdLog(group[1], date)
-            ProvinceDailyLog p2 = pdLog(group[2], date)
-            int fip = group[3] as int
-            p1.iip -= fip
-            p1.ip -= fip
-            p2.iip += fip
-            p2.ip += fip
-        })
-
-CommandHandles.instance.addHandle('FSP')
-        .withReg(~/(\S+) 流入 疑似患者 (\S+) (\d+)人/)
-        .withHandle({ date, group ->
-            ProvinceDailyLog p1 = pdLog(group[1], date)
-            ProvinceDailyLog p2 = pdLog(group[2], date)
-            int fsp = group[3] as int
-            p1.isp -= fsp
-            p1.sp -= fsp
-            p2.isp += fsp
-            p2.sp += fsp
-        })
-
-CommandHandles.instance.addHandle('DEAD')
-        .withReg(~/(\S+) 死亡 (\d+)人/)
-        .withHandle({ date, group ->
-            ProvinceDailyLog p = pdLog(group[1], date)
-            int dead = group[2] as int
-            p.ip -= dead
-            p.dead += dead
-            p.idead += dead
-        })
-
-CommandHandles.instance.addHandle('CURE')
-        .withReg(~/(\S+) 治愈 (\d+)人/)
-        .withHandle({ date, group ->
-            ProvinceDailyLog p = pdLog(group[1], date)
-            int cure = group[2] as int
-            p.ip -= cure
-            p.cure += cure
-            p.icure += cure
-        })
-
-CommandHandles.instance.addHandle('CSP')
-        .withReg(~/(\S+) 疑似患者 确诊感染 (\d+)人/)
-        .withHandle({ date, group ->
-            ProvinceDailyLog p = pdLog(group[1], date)
-            int csp = group[2] as int
-            p.csp += csp
-            p.sp -= csp
-            p.isp -= csp
-            p.iip += csp
-            p.ip += csp
-        })
-
-CommandHandles.instance.addHandle('ESP')
-        .withReg(~/(\S+) 排除 疑似患者 (\d+)人/)
-        .withHandle({ date, group ->
-            ProvinceDailyLog p = pdLog(group[1], date)
-            int esp = group[2] as int
-            p.esp += esp
-            p.sp -= esp
-            p.isp -= esp
-        })
-
-
-def logs = Logs.readFrom('../log')
-
-logs.eachLogLine { date, line ->
-    CommandHandles.instance.handle(date, line)
-}
-
-ProvinceMap.instance
+InfectStat.extend()
+Main.instance.useLogsHandler(InfectStat.&handleLogs)
+Main.instance.run(args)

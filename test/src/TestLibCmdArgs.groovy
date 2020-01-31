@@ -1,16 +1,20 @@
-// groovy TestLibCmd list -date 2020-01-22 -out D:/output.txt -province 福建 浙江
+// groovy -cp ../../out/classes/groovy/main;../../out/classes/groovy/test;
+//              TestLibCmdArgs list -date 2020-01-22 -out D:/output.txt -province 福建 浙江
 
-testCmdArgs1(new CmdArgs(args))
+//testCmdArgs1(new CmdArgs(args))
 testCmdArgs1(new CmdArgs('groovy Lib list -date 2020-01-22 -out D:/output.txt -province 福建 浙江', 'groovy Lib'))
 testCmdArgs1(new CmdArgs('list -date 2020-01-22 -out D:/output.txt -province 福建 浙江'))
 
-CmdArgs.eachLine('../case/testCmd1.txt', '$ java InfectStatistic') {
+// gradle 调用和命令行调用时user.dir不同
+def userDir = System.getProperty('user.dir')
+println userDir
+CmdArgs.eachLine("$userDir/test/case/testLibCmdArgs1.txt", '$ java InfectStatistic') {
     CmdArgs cmdArgs ->
         if (cmdArgs.cmd == 'list') testCmdArgs1(cmdArgs)
         else testCmdArgs2(cmdArgs)
 }
 
-CmdArgs.eachLine('../case/testCmd2.txt') {
+CmdArgs.eachLine("$userDir/test/case/testLibCmdArgs2.txt") {
     CmdArgs cmdArgs ->
         if (cmdArgs.cmd == 'list') testCmdArgs1(cmdArgs)
         else testCmdArgs2(cmdArgs)

@@ -1,2 +1,0 @@
-incStat -date 2020-01-23 -out D:/incStatOutput.txt -sp
-list -date 2020-01-22 -out D:/listOutput.txt

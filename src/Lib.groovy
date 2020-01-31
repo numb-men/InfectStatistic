@@ -5,6 +5,7 @@ import java.text.SimpleDateFormat
 
 /**
  * Lib.groovy：公用的类
+ * @author hengyumo* @since 2020-01-31
  */
 
 /**
@@ -165,13 +166,6 @@ class ProvinceDailyLog {
     int csp, esp
 
     /**
-     * 默认全部为0
-     */
-    ProvinceDailyLog() {
-        ip = sp = cure = dead = iip = isp = icure = idead = csp = esp = 0
-    }
-
-    /**
      * 继承之前的数据来构造
      * @param ip
      * @param sp
@@ -183,7 +177,6 @@ class ProvinceDailyLog {
         this.sp = sp
         this.dead = dead
         this.cure = cure
-        iip = isp = icure = idead = csp = esp = 0
     }
 }
 
@@ -194,8 +187,12 @@ class ProvinceLogs {
     // 该省的日志列表
     def logs = new HashMap<Date, ProvinceDailyLog>()
     // 该省现今的日志
-    Date now
     ProvinceDailyLog nowLog
+
+    // 排序好的日期
+    def getDateSorted() {
+        logs.keySet().sort()
+    }
 }
 
 /**
@@ -205,13 +202,15 @@ class ProvinceLogs {
 class ProvinceMap {
     def map = new HashMap<String, ProvinceLogs>()
 
+    Date latest
+
     /**
      * 获取某省某天的日志，若未找到则会新创建一个
      * @param name
      * @param date
      * @return
      */
-    ProvinceDailyLog getOrCreateProvinceLogs(String name, Date date) {
+    ProvinceDailyLog getOrCreateProvinceDailyLog(String name, Date date) {
         if (map.containsKey(name)) {
             def provinceLogs = map.get(name)
             if (provinceLogs.logs.containsKey(date)) {
@@ -223,7 +222,9 @@ class ProvinceMap {
                 preProvinceDailyLog.with {
                     newProvinceDailyLog = new ProvinceDailyLog(ip, sp, dead, cure)
                 }
-                provinceLogs.now = date
+                if (date > latest) {
+                    latest = date
+                }
                 provinceLogs.nowLog = newProvinceDailyLog
                 provinceLogs.logs.put(date, newProvinceDailyLog)
                 newProvinceDailyLog
@@ -232,7 +233,9 @@ class ProvinceMap {
             def provinceLogs = new ProvinceLogs()
             def newProvinceDailyLog = new ProvinceDailyLog()
             provinceLogs.logs.put(date, newProvinceDailyLog)
-            provinceLogs.now = date
+            if (date > latest) {
+                latest = date
+            }
             provinceLogs.nowLog = newProvinceDailyLog
             map.put(name, provinceLogs)
             newProvinceDailyLog
@@ -245,7 +248,7 @@ class ProvinceMap {
      * @param date
      * @return
      */
-    ProvinceDailyLog getProvinceLogs(String name, Date date) {
+    ProvinceDailyLog getProvinceDailyLog(String name, Date date) {
         if (map.containsKey(name)) {
             def provinceLogs = map.get(name)
             if (provinceLogs.logs.containsKey(date)) {
@@ -254,38 +257,45 @@ class ProvinceMap {
         }
         null
     }
+
+    ProvinceDailyLog getProvinceDailyLogLatest(String name) {
+        map.get(name)?.nowLog
+    }
 }
 
+/**
+ * 不同种类的命令
+ */
 class Command {
     String name
     Closure runFunc
 
+    /**
+     * 为命令设置运行闭包
+     * @param aRunFunc{ cmdArgs -> }* @return this
+     */
     Command whenRun(Closure aRunFunc) {
         runFunc = aRunFunc
         this
     }
 
+    /**
+     * 使用传入的cmdArgs运行该种命令
+     * @param cmdArgs
+     */
     void runWith(CmdArgs cmdArgs) {
         runFunc.call(cmdArgs)
     }
 }
 
-Main.instance.addCommand('list').whenRun { CmdArgs cmdArgs ->
-    if (!cmdArgs.has('out')) {
-        println '请设置输出路径'
-    } else if (cmdArgs.has('date')) {
-
-    } else if (cmdArgs.has('type')) {
-
-    } else if (cmdArgs.has('province')) {
-
-    }
-}
-
+/**
+ * 核心程序
+ */
 @Singleton
 class Main {
-    CmdArgs cmdArgs
     Map cmds = new HashMap<String, Command>(3)
+
+    boolean hasHandledLog = false
 
     Command addCommand(name) {
         def cmd = new Command(name: name)
@@ -293,26 +303,117 @@ class Main {
         cmd
     }
 
-    void withArgs(String[] args) {
-        cmdArgs = new CmdArgs(args)
+    void useLogsHandler(Closure logsHandler) {
+        logsHandler.call()
+        hasHandledLog = true
+        this
     }
 
-    void useStatClosure(Closure statClosure) {
-
-    }
-
-    void run() {
-        switch (cmdArgs.cmd) {
-            case 'list':
-                // -out -date -type -province
-                break
-            case 'incStat':
-                break
-            case 'cmd':
-                break
-            default:
+    void run(String[] args) {
+        if (!hasHandledLog) {
+            throw new Exception('日志未处理')
+        }
+        try {
+            CmdArgs cmdArgs = args.size() > 1 ?
+                    new CmdArgs(args) : new CmdArgs(args[0])
+            Command command = cmds.get(cmdArgs.cmd)
+            if (command == null) {
                 println "不支持的命令：${cmdArgs.cmd}"
+            } else {
+                command.runWith(cmdArgs)
+            }
+        } catch (Exception e) {
+            println e.message
         }
     }
 }
 
+
+/**
+ * 集中解析命令行参数
+ * @param cmdArgs
+ * @return [output, date, type, province, sp, input]
+ */
+static def parseCmdArgs(CmdArgs cmdArgs) {
+    // 所有被支持的参数
+    def output, date, type, province, sp, input
+
+    output = date = type = province = sp = input = null
+
+    if (cmdArgs.has('out')) {
+        output = new File(cmdArgs.argVal('out'))
+    }
+
+    if (cmdArgs.has('date')) {
+        date = new SimpleDateFormat('yyyy-MM-dd').parse(cmdArgs.argVal('date'))
+    }
+
+    if (cmdArgs.has('type')) {
+        type = cmdArgs.argVals('type')
+    }
+
+    if (cmdArgs.has('province')) {
+        province = cmdArgs.argVals('province')
+    }
+
+    if (cmdArgs.has('sp')) {
+        sp = true
+    }
+
+    if (cmdArgs.has('in')) {
+        def inputName = cmdArgs.argVal('in')
+        input = new File(inputName)
+        if (!input.exists()) {
+            throw new Exception("文件：$inputName 不存在")
+        }
+    }
+
+    return [output, date, type, province, sp, input]
+}
+
+// 添加list命令
+Main.instance.addCommand('list').whenRun { CmdArgs cmdArgs ->
+    def (File output, Date date, List type, List province) = parseCmdArgs(cmdArgs)
+    if (!output) {
+        throw new Exception('请传入输出文件路径')
+    }
+    def strGenerated = ''
+    def gStringMap = [
+            ip  : "感染患者${-> provinceLogAtDate.ip}人",
+            sp  : "疑似患者${-> provinceLogAtDate.sp}人",
+            cure: "治愈${-> provinceLogAtDate.cure}人",
+            dead: "死亡${-> provinceLogAtDate.dead}人"
+    ]
+    def templateString = "${-> provinceName}"
+    if (!type) {
+        templateString = " " + gStringMap.values().join(' ')
+    } else {
+        for (def t in type) {
+            templateString += " " + gStringMap."$t"
+        }
+    }
+    ProvinceMap.instance.each { String provinceName, ProvinceLogs provinceLogs ->
+        if (province && !(provinceName in province)) {
+            return
+        }
+        def provinceLogAtDate = date ? provinceLogs.nowLog : provinceLogs.logs.get(date)
+        if (provinceLogAtDate == null) {
+            def dates = provinceLogs.dateSorted
+            // 日期缺失则默认取离其最近的前一天
+            for (int i = 0; i < dates.size(); i++) {
+                if (dates[i] < date && (i < dates.size() - 1 && dates[i + 1] > date)) {
+                    provinceLogAtDate = provinceLogs.logs.get(dates[i])
+                    provinceLogs.logs.put(date, provinceLogAtDate)
+                }
+            }
+            // 日期超出了提供的日志的最后一天
+            if (provinceLogAtDate == null) {
+                throw new Exception('日期超出日志范围')
+            }
+        }
+        println templateString
+        strGenerated += templateString + '\n'
+    }
+    println strGenerated
+    output << strGenerated
+}
