@@ -17,3 +17,5 @@ gradle
 .gitattributes
 gradlew
 gradlew.bat
+output
+result

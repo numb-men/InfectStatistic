@@ -4,7 +4,7 @@
  * This is a general purpose Gradle build.
  * Learn how to create Gradle builds at https://guides.gradle.org/creating-new-gradle-builds
  */
-apply plugin:'groovy'
+apply plugin: 'groovy'
 
 // 修改源码目录
 sourceSets {
@@ -18,7 +18,7 @@ sourceSets {
             srcDirs = ['test/src']
         }
         resources {
-            srcDirs 'case'
+            srcDirs 'test/case'
         }
     }
 }
@@ -38,18 +38,30 @@ dependencies {
 }
 
 // 自定义测试任务
-task testLibCmdArgs(dependsOn: [compileGroovy, compileTestGroovy]) {
+task testCmdArgsCanRun(dependsOn: [compileGroovy, compileTestGroovy]) {
     group = 'my'
     description = 'test lib CmdArgs.'
 
     doFirst {
         String sh = 'groovy -cp out/classes/groovy/main;out/classes/groovy/test; ' +
-                'test/src/TestLibCmdArgs ' +
+                'test/src/TestCmdArgsCanRun.groovy ' +
                 'list -date 2020-01-22 -out D:/output.txt -province 福建 浙江'
         Process process = sh.execute()
         logger.log LogLevel.ERROR, process.err.getText('gbk')
-        logger.info "testLibCmd output:\n ${process.in.getText('gbk')}"
+        println "testLibCmd output:\n${process.in.getText('gbk')}"
     }
 }
 
-test.dependsOn testLibCmdArgs
+task testIntegrationMain(dependsOn: [compileGroovy, compileTestGroovy]) {
+    group = 'my'
+    description = 'test province map.'
+
+    doFirst {
+        String sh = 'groovy -cp out/classes/groovy/main;out/classes/groovy/test; ' +
+//                '-Duser.dir=D:\\code\\groovy\\InfectStatistic\\test\\src\\ ' +
+                'test/src/TestIntegrationMain.groovy log'
+        Process process = sh.execute()
+        logger.log LogLevel.ERROR, process.err.getText('gbk')
+        println "testProvinceMap output:\n${process.in.getText('gbk')}"
+    }
+}

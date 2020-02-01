@@ -44,7 +44,7 @@ class InfectStatBad {
      * 扩展ProvinceDailyLog，增加处理对应日志的方法
      */
     static def extend() {
-        ProvinceDailyLog.metaClass {
+        DailyLog.metaClass {
 
             withIip = { iip ->
                 delegate.iip += iip
@@ -56,14 +56,14 @@ class InfectStatBad {
                 delegate.sp += isp
             }
 
-            withFip = { ProvinceDailyLog p, fip ->
+            withFip = { DailyLog p, fip ->
                 delegate.iip -= fip
                 delegate.ip -= fip
                 p.iip += fip
                 p.ip += fip
             }
 
-            withFsp = { ProvinceDailyLog p, fsp ->
+            withFsp = { DailyLog p, fsp ->
                 delegate.isp -= fsp
                 delegate.sp -= fsp
                 p.isp += fsp
@@ -102,16 +102,17 @@ class InfectStatBad {
      * 处理日志
      * @return
      */
-    static def handleLogs() {
-        def logs = Logs.readFrom('../log')
+    static def handleLogs(String logsPath) {
+        def logs = Logs.readFrom(logsPath)
 
         logs.eachLogLine { date, line ->
             //noinspection GroovyAssignabilityCheck
             def (LogRegex logRex, Matcher matcher) = LogRegex.match(line)
             // 科里化闭包
             def provinceDailyLog = { String name ->
-                ProvinceMap.instance.getOrCreateProvinceDailyLog(name, date)
+                LogCache.instance.getOrCreateDailyLog(name, date)
             }
+            DailyLog nationwideDailyLog = LogCache.instance.getOrCreateNationWideDailyLog(date)
             def group = { matcher.group(it) }
             def groupI = { matcher.group(it) as int }
 
@@ -120,10 +121,14 @@ class InfectStatBad {
              */
             switch (logRex) {
                 case LogRegex.IIP:
-                    provinceDailyLog(group(1)).withIip(groupI(2))
+                    int iip = groupI(2)
+                    provinceDailyLog(group(1)).withIip(iip)
+                    nationwideDailyLog.withIip(iip)
                     break
                 case LogRegex.ISP:
-                    provinceDailyLog(group(1)).withIsp(groupI(2))
+                    int isp = groupI(2)
+                    provinceDailyLog(group(1)).withIsp(isp)
+                    nationwideDailyLog.withIsp(isp)
                     break
                 case LogRegex.FIP:
                     provinceDailyLog(group(1)).withFip(
@@ -134,16 +139,24 @@ class InfectStatBad {
                             provinceDailyLog(group(2)), groupI(3))
                     break
                 case LogRegex.DEAD:
-                    provinceDailyLog(group(1)).withDead(groupI(2))
+                    int dead = groupI(2)
+                    provinceDailyLog(group(1)).withDead(dead)
+                    nationwideDailyLog.withDead(dead)
                     break
                 case LogRegex.CURE:
-                    provinceDailyLog(group(1)).withCure(groupI(2))
+                    int cure = groupI(2)
+                    provinceDailyLog(group(1)).withCure(cure)
+                    nationwideDailyLog.withCure(cure)
                     break
                 case LogRegex.CSP:
-                    provinceDailyLog(group(1)).withCsp(groupI(2))
+                    int csp = groupI(2)
+                    provinceDailyLog(group(1)).withCsp(csp)
+                    nationwideDailyLog.withCsp(csp)
                     break
                 case LogRegex.ESP:
-                    provinceDailyLog(group(1)).withEsp(groupI(2))
+                    int esp = groupI(2)
+                    provinceDailyLog(group(1)).withEsp(esp)
+                    nationwideDailyLog.withEsp(esp)
                     break
                 default:
                     println "不支持的日志格式： $line"
@@ -155,5 +168,5 @@ class InfectStatBad {
 // --------------- 主程序 -------------------
 
 InfectStatBad.extend()
-Main.instance.useLogsHandler(InfectStatBad.&handleLogs)
+Main.instance.useLogsHandler('../log', InfectStatBad.&handleLogs)
 Main.instance.run(args)
