@@ -1,14 +1,21 @@
 import groovy.transform.Immutable
 import org.junit.platform.commons.util.StringUtils
 
+import java.text.Collator
 import java.text.SimpleDateFormat
+import java.util.regex.Pattern
 
 /**
  * Lib.groovy：公用的类
  * @author hengyumo* @since 2020-01-31
  */
 
-class StatException extends Exception {}
+/**
+ * 由用户错误操作造成的异常
+ */
+class StatException extends Exception {
+    StatException(String msg) { super(msg) }
+}
 
 /**
  * 解析命令行参数
@@ -52,6 +59,12 @@ class CmdArgs {
      * @return
      */
     String getCmd() {
+        if (args.size() == 0) {
+            throw new StatException('请传入参数')
+        }
+        if (args[0].startsWith('-')) {
+            throw new StatException('请传入命令/命令应排在参数之前')
+        }
         args[0]
     }
 
@@ -115,39 +128,42 @@ class Log {
 }
 
 /**
- * 日志缓存、读取
+ * 日志文本缓存
  */
 class Logs {
 
-    List<Log> logs
+    static List<Log> logs
 
     /**
      * 从某文件夹路径读取所有日志
      * @param path
      * @return
      */
-    static Logs readFrom(String path) {
+    static List<Log> readFrom(String path) {
+        def newLogs = new ArrayList<Log>()
         def logFiles = new File(path)
         def dateFormat = new SimpleDateFormat('yyyy-MM-dd')
-        def logs = new ArrayList<Log>()
         logFiles.eachFile { file ->
             Date date = dateFormat.parse(file.name - '.log.txt')
-            logs << new Log(date: date, text: file.text)
+            newLogs << new Log(date: date, text: file.text)
         }
-
-        new Logs(logs: logs.sort())
+        newLogs.sort { log1, log2 ->
+            log1.date <=> log2.date
+        }
+        logs = newLogs
     }
 
     /**
      * 遍历所有日志的所有行，执行传入的闭包
      * @param closure{ date, line -> }
      */
-    void eachLogLine(Closure closure) {
-        logs.forEach { log ->
+    static void eachLogLine(Closure closure) {
+        for (def log in logs) {
             log.text.eachLine { line ->
                 if (StringUtils.isNotBlank(line) && !line.startsWith("//")) {
                     closure.call(log.date, line)
                 }
+                null
             }
         }
     }
@@ -282,6 +298,11 @@ class LogCache {
     DailyLog getDailyLogLatest(String name) {
         map.get(name)?.latestLog
     }
+
+    def clear() {
+        map = new HashMap<String, ProvinceLogs>()
+        latest = null
+    }
 }
 
 /**
@@ -309,15 +330,17 @@ class Command {
     }
 }
 
+
 /**
  * 核心程序
  */
 @Singleton
 class Main {
+
+    // todo 目前只有三个命令
     Map cmds = new HashMap<String, Command>(3)
 
-    // 是否已经处理好日志
-    boolean hasHandledLog = false
+    Closure logsHandler
 
     /**
      * 添加命令：链式构造
@@ -330,14 +353,17 @@ class Main {
         cmd
     }
 
+    void clear() {
+        LogCache.instance.clear()
+        cmds = new HashMap<String, Command>(3)
+    }
+
     /**
-     * 使用某个LogsHandle
-     * @param logsPath
+     * 使用某个LogsHandle，后边在运行时需要传入-log参数
      * @param logsHandler
      */
-    void useLogsHandler(String logsPath, Closure logsHandler) {
-        logsHandler.call(logsPath)
-        hasHandledLog = true
+    void useLogsHandler(Closure logsHandler) {
+        this.logsHandler = logsHandler
         this
     }
 
@@ -346,13 +372,10 @@ class Main {
      * @param cmdArgs
      */
     void run(CmdArgs cmdArgs) {
-        if (!hasHandledLog) {
-            throw new Exception('日志未处理')
-        }
         try {
             Command command = cmds.get(cmdArgs.cmd)
             if (command == null) {
-                println "不支持的命令：${cmdArgs.cmd}"
+                throw new StatException("不支持的命令：${cmdArgs.cmd}")
             } else {
                 command.runWith(cmdArgs)
             }
@@ -383,16 +406,55 @@ class Main {
  * 扩展程序支持的cmd、解耦
  */
 class CmdExtend {
+
+    final static String NOTICE = '// 该文档并非真实数据，仅供测试使用'
+
+    final static PROVINCE_LIST = ["安徽", "北京", "重庆", "福建", "甘肃", "广东",
+                                  "广西", "贵州", "海南", "河北", "河南", "黑龙江", "湖北",
+                                  "湖南", "吉林", "江苏", "江西", "辽宁", "内蒙古", "宁夏",
+                                  "青海", "山东", "山西", "陕西", "上海", "四川",
+                                  "天津", "西藏", "新疆", "云南", "浙江",]
     /**
      * 集中解析命令行参数
      * @param cmdArgs
-     * @return [output, date, type, province, sp, input]
+     * @return [logsPath, output, date, type, province, sp, input]
      */
-    static def parseCmdArgs(CmdArgs cmdArgs) {
+    static def parseCmdArgs(CmdArgs cmdArgs, Boolean needLogs=true) {
         // 所有被支持的参数
-        def output, date, type, province, sp, input
+        def logsPath, output, date, type, province, sp, input
 
-        output = date = type = province = sp = input = null
+        logsPath = output = date = type = province = sp = input = null
+        // 读取日志
+        logsPath = cmdArgs.argVal('log')
+
+        if (needLogs) {
+            if (!logsPath) {
+                throw new StatException('请设置-log 目录位置')
+            }
+            def logsDir = new File(logsPath)
+            if (!logsDir.exists()) {
+                throw new StatException('日志目录不存在')
+            } else {
+                if (logsDir.isFile()) {
+                    throw new StatException('日志目录应该要是目录')
+                } else {
+                    String[] logNames = logsDir.list()
+                    if (logNames.length == 0) {
+                        throw new StatException('日志目录不能为空')
+                    } else {
+                        final Pattern logNamePattern = ~/\d{4}-\d{2}-\d{2}\.log\.txt/
+                        for (String logName in logNames) {
+                            // 绝对匹配
+                            if (!(logName ==~ logNamePattern)) {
+                                throw new StatException("$logName 不符合日志文件命名要求")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Main.instance.logsHandler.call(logsPath)
+        }
 
         if (cmdArgs.has('out')) {
             output = new File(cmdArgs.argVal('out'))
@@ -400,14 +462,23 @@ class CmdExtend {
 
         if (cmdArgs.has('date')) {
             date = new SimpleDateFormat('yyyy-MM-dd').parse(cmdArgs.argVal('date'))
+            if (date < Logs.logs[0].date || date > Logs.logs[-1].date) {
+                throw new StatException('日期超出日志范围')
+            }
         }
 
         if (cmdArgs.has('type')) {
             type = cmdArgs.argVals('type')
+            if (type != null && type.size() == 0) {
+                throw new StatException('-type后至少需要跟着一个参数值')
+            }
         }
 
         if (cmdArgs.has('province')) {
             province = cmdArgs.argVals('province')
+            if (province != null && province.size() == 0) {
+                throw new StatException('-province后至少需要跟着一个参数值')
+            }
         }
 
         if (cmdArgs.has('sp')) {
@@ -422,7 +493,55 @@ class CmdExtend {
             }
         }
 
-        return [output, date, type, province, sp, input]
+        return [logsPath, output, date, type, province, sp, input]
+    }
+
+    static void eachPName(province, date, Closure closure) {
+        // 将全国移到第一个，其它省按照汉字拼音排序
+        def keys = new HashSet<String>(LogCache.instance.map.keySet())
+        if (province) {
+            keys.addAll(province)
+        }
+//        Comparator<String> comparator = Collator.getInstance(Locale.CHINA)
+        def pNames = keys.sort { name1, name2 ->
+//            comparator.compare(name1, name2)
+            // 防止重庆被排序为zhongqing，使用预先声明好的排序
+            PROVINCE_LIST.indexOf(name1) - PROVINCE_LIST.indexOf(name2)
+        }
+        int nationIndex = pNames.indexOf(LogCache.NATIONWIDE)
+        for (int i = nationIndex; i > 0; i--) {
+            pNames[i] = pNames[i - 1]
+        }
+        pNames[0] = LogCache.NATIONWIDE
+
+        pNames.each { String pName ->
+            // 如果设置了province选项，则只列出提供的省的数据
+            if (province && !(pName in province)) {
+                return
+            }
+            ProvinceLogs provinceLogs = LogCache.instance.map.get(pName)
+            DailyLog provinceLogAtDate
+            // 该省日志未记录过，则默认都为0
+            if (provinceLogs == null) {
+                provinceLogAtDate = new DailyLog()
+            } else {
+                // 未设置date则默认取提供日志的最新的一天
+                provinceLogAtDate = date ? provinceLogs.logs.get(date) : provinceLogs.latestLog
+                if (provinceLogAtDate == null) {
+                    def dates = provinceLogs.dateSorted
+                    // 日期缺失则默认取离其最近的前一天
+                    for (int i = 0; i < dates.size(); i++) {
+                        if (dates[i] < date && (i < dates.size() - 1 && dates[i + 1] > date)) {
+                            def latestLog = provinceLogs.logs.get(dates[i])
+                            latestLog.with {
+                                provinceLogAtDate = new DailyLog(ip, sp, dead, cure)
+                            }
+                        }
+                    }
+                }
+            }
+            closure.call(pName, provinceLogAtDate)
+        }
     }
 
     /**
@@ -431,7 +550,7 @@ class CmdExtend {
     static void extend() {
         // 添加list命令
         Main.instance.addCommand('list').whenRun { CmdArgs cmdArgs ->
-            def (File output, Date date, List type, List province) = parseCmdArgs(cmdArgs)
+            def (String logsPath, File output, Date date, List type, List province) = parseCmdArgs(cmdArgs)
             if (!output) {
                 throw new StatException('请传入输出文件路径')
             }
@@ -440,52 +559,91 @@ class CmdExtend {
             def provinceName = ''
             // 利用闭包惰性求值
             def gStringMap = [
-                    ip  : " 感染患者${-> provinceLogAtDate?.ip}人",
+                    ip  : " 感染患者${-> provinceLogAtDate.ip}人",
                     sp  : " 疑似患者${-> provinceLogAtDate.sp}人",
                     cure: " 治愈${-> provinceLogAtDate.cure}人",
                     dead: " 死亡${-> provinceLogAtDate.dead}人"
             ]
 
-            // 将全国移到第一个，其它省按照字母排序
-            def pNames = LogCache.instance.map.keySet().sort()
-            pNames.swap(0, pNames.indexOf(LogCache.NATIONWIDE))
-
-            pNames.each { String pName ->
-                // 如果设置了province选项，则只列出提供的省的数据
-                if (province && !(pName in province)) {
-                    return
-                }
-                ProvinceLogs provinceLogs = LogCache.instance.map.get(pName)
+            eachPName(province, date) { String pName, DailyLog pLogAtDate ->
                 provinceName = pName
-                // 未设置date则默认取提供日志的最新的一天
-                provinceLogAtDate = date ? provinceLogs.latestLog : provinceLogs.logs.get(date)
-                if (provinceLogAtDate == null) {
-                    def dates = provinceLogs.dateSorted
-                    // 日期缺失则默认取离其最近的前一天
-                    for (int i = 0; i < dates.size(); i++) {
-                        if (dates[i] < date && (i < dates.size() - 1 && dates[i + 1] > date)) {
-                            provinceLogAtDate = provinceLogs.logs.get(dates[i])
-                            provinceLogs.logs.put(date, provinceLogAtDate)
-                        }
-                    }
-                    // 日期超出了提供的日志的最后一天
-                    if (provinceLogAtDate == null) {
-                        throw new StatException('日期超出日志范围')
-                    }
-                }
+                provinceLogAtDate = pLogAtDate
+
                 def templateString = "${-> provinceName}"
                 if (!type) {
                     templateString += gStringMap.values().join()
                 } else {
                     for (def t in type) {
+                        if (!gStringMap.containsKey(t)) {
+                            throw new StatException("不存在的type：$t")
+                        }
                         templateString += gStringMap."$t"
                     }
                 }
-                println templateString
                 strGenerated += templateString + '\n'
             }
+            strGenerated += NOTICE
             output.withWriter('utf-8') { writer ->
                 writer.write(strGenerated)
+            }
+        }
+
+        // 添加incStat命令
+        Main.instance.addCommand('incStat').whenRun { CmdArgs cmdArgs ->
+            def (String logsPath, File output, Date date, List type, List province, Boolean sp) = parseCmdArgs(cmdArgs)
+            if (!output) {
+                throw new StatException('请传入输出文件路径')
+            }
+            def strGenerated = ''
+            def provinceLogAtDate = null
+            def provinceName = ''
+            // 利用闭包惰性求值
+            def gStringMap = [
+                    ip  : " 新增感染患者${-> provinceLogAtDate.iip}人",
+                    sp  : " 新增疑似患者${-> provinceLogAtDate.isp}人",
+                    cure: " 新增治愈${-> provinceLogAtDate.icure}人",
+                    dead: " 新增死亡${-> provinceLogAtDate.idead}人"
+            ]
+            def spGString = " 疑似患者确诊感染${-> provinceLogAtDate.csp}人 排除疑似患者${-> provinceLogAtDate.esp}人"
+
+            eachPName(province, date) { String pName, DailyLog pLogAtDate ->
+                provinceName = pName
+                provinceLogAtDate = pLogAtDate
+
+                def templateString = "${-> provinceName}"
+                if (!type) {
+                    templateString += gStringMap.values().join()
+                } else {
+                    for (def t in type) {
+                        if (!gStringMap.containsKey(t)) {
+                            throw new StatException("不存在的type：$t")
+                        }
+                        templateString += gStringMap."$t"
+                    }
+                }
+                strGenerated += templateString
+                if (sp) {
+                    strGenerated += spGString
+                }
+                strGenerated += '\n'
+            }
+            strGenerated += NOTICE
+            output.withWriter('utf-8') { writer ->
+                writer.write(strGenerated)
+            }
+        }
+
+        // 添加cmd命令
+        Main.instance.addCommand('cmd').whenRun { CmdArgs cmdArgs ->
+            File input = parseCmdArgs(cmdArgs, false)[-1]
+            if (!input) {
+                throw new StatException('请传入命令文件路径')
+            }
+            input.eachLine { line ->
+                if (StringUtils.isNotBlank(line) && !line.startsWith('//')) {
+                    LogCache.instance.clear()
+                    Main.instance.run(line)
+                }
             }
         }
     }

@@ -1,0 +1,9 @@
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut2\ListOut2.txt -date 2020-01-22 -province 福建 河北
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut2\ListOut3.txt -date 2020-01-22 -type ip
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut2\ListOut4.txt -date 2020-01-22 -type cure dead
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut2\ListOut5.txt -date 2020-01-22 -type cure dead ip
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut2\ListOut6.txt -date 2020-01-23
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut2\ListOut7.txt -date 2020-01-23 -type cure dead ip -province 全国 浙江 福建
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut2\ListOut8.txt
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut2\ListOut9.txt -date 2020-01-27 -type dead -province 福建
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut2\ListOut10.txt -date 2020-01-25

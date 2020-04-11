@@ -25,7 +25,8 @@ class LogHandle {
 
     /**
      * 设置闭包，链式调用
-     * @param aFunc{ date, group -> }* @return
+     * @param aFunc{ date, group -> }
+     * @return
      */
     LogHandle withHandle(aFunc) {
         handleFunc = aFunc
@@ -68,7 +69,7 @@ class LogsHandle {
                 return
             }
         }
-        println "不支持的日志格式： $line"
+        throw new StatException("不支持的日志格式： $line")
     }
 }
 
@@ -161,6 +162,7 @@ class InfectStat {
                     int dead = group[2] as int
                     def doDead = {
                         it.ip -= dead
+                        it.iip -= dead
                         it.dead += dead
                         it.idead += dead
                     }
@@ -176,6 +178,7 @@ class InfectStat {
                     int cure = group[2] as int
                     def doCure = {
                         it.ip -= cure
+                        it.iip -= cure
                         it.cure += cure
                         it.icure += cure
                     }
@@ -214,7 +217,6 @@ class InfectStat {
                     doEsp(p)
                     doEsp(n)
                 })
-
     }
 
     /**
@@ -222,9 +224,8 @@ class InfectStat {
      * @return
      */
     static def handleLogs(String logsPath) {
-        def logs = Logs.readFrom(logsPath)
-
-        logs.eachLogLine { date, line ->
+        Logs.readFrom(logsPath)
+        Logs.eachLogLine { date, line ->
             LogsHandle.instance.handle(date, line)
         }
     }
@@ -233,6 +234,13 @@ class InfectStat {
 
 // --------------- 主程序 -------------------
 
-InfectStat.extend()
-Main.instance.useLogsHandler('../log', InfectStat.&handleLogs)
-Main.instance.run(args)
+class RunMain {
+    static void main(String[] args) {
+        InfectStat.extend()
+        CmdExtend.extend()
+        Main.instance.useLogsHandler(InfectStat.&handleLogs)
+        Main.instance.run(args)
+    }
+}
+
+RunMain.main(args)

@@ -1,0 +1,3 @@
+list -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut1\ListOut1.txt -date 2020-01-22
+
+// 简单测试一条命令的执行

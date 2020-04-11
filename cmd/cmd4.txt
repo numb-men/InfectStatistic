@@ -1,0 +1,3 @@
+cmd -in D:\code\groovy\InfectStatistic\cmd\cmd1.txt
+cmd -in D:\code\groovy\InfectStatistic\cmd\cmd2.txt
+cmd -in D:\code\groovy\InfectStatistic\cmd\cmd3.txt

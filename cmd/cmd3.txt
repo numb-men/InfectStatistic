@@ -1,0 +1,6 @@
+incStat -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut3\IncStatOut1.txt -date 2020-01-22
+incStat -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut3\IncStatOut2.txt -date 2020-01-23
+incStat -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut3\IncStatOut3.txt -date 2020-01-27
+incStat -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut3\IncStatOut4.txt -date 2020-01-27 -sp
+incStat -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut3\IncStatOut5.txt -date 2020-01-25 -sp
+incStat -log D:/code/groovy/InfectStatistic/log -out D:\code\groovy\InfectStatistic\output\cmdOut3\IncStatOut6.txt -type cure dead -province 河北 福建 湖北 -sp

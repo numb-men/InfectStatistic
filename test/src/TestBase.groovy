@@ -1,16 +1,34 @@
+import org.junit.Ignore
+
+@Ignore
 class TestBase extends GroovyTestCase {
+
+    final static String CHARSET = 'GBK'
+
     static String result
+
+    static String lastExpected
 
     void setUp() {
         result = ""
+        lastExpected = ""
     }
 
-    static void runShellScript(script) {
-        result = "$script".execute().text
+    static void runShell(String sh, String workDir = null) {
+        // 设置工作目录，默认和当前进程一致
+        Process process = workDir ? sh.execute(null, new File(workDir)) : sh.execute()
+        String errText = process.err.getText(CHARSET)
+        // 错误则抛出异常，正确则返回程序控制台输出
+        if (errText) throw new RuntimeException(errText)
+        else result = process.in.getText(CHARSET)
     }
 
-    static void evaluateScript(scriptFileName) {
-        result = "groovy $scriptFileName".execute().text
+    static void runShellScript(script, String workDir = null) {
+        runShell("$script", workDir)
+    }
+
+    static void evaluateScript(String scriptFileName, String argStr, String classPath, String workDir = null) {
+        runShell("groovy -cp $classPath $scriptFileName $argStr", workDir)
     }
 
     static def runInGroovyShell(scriptFileName) {
@@ -18,11 +36,20 @@ class TestBase extends GroovyTestCase {
     }
 
     static void runGradle(tasks) {
-        result = "gradle -q $tasks".execute().text
+        runShell("gradle -q $tasks")
     }
 
     static void assertResultEquals(expected) {
         assertEquals(expected, result)
+        lastExpected = expected
+    }
+
+    static void assertResultEqualsToo() {
+        assertEquals(lastExpected, result)
+    }
+
+    static void assertFileEquals(outputFileName, expectedResultFileName) {
+        assertEquals(new File(expectedResultFileName).text, new File(outputFileName).text)
     }
 
     static void assertResultMatchesFileContent(contentFile) {

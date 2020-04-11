@@ -4,7 +4,13 @@
  * This is a general purpose Gradle build.
  * Learn how to create Gradle builds at https://guides.gradle.org/creating-new-gradle-builds
  */
-apply plugin: 'groovy'
+plugins {
+    id 'groovy'
+    id 'com.github.johnrengelman.shadow' version '5.2.0'
+}
+
+version = 1.0
+group = 'cn.hengyumo'
 
 // 修改源码目录
 sourceSets {
@@ -22,6 +28,7 @@ sourceSets {
         }
     }
 }
+
 
 //修改输出目录
 buildDir = 'out'
@@ -54,7 +61,7 @@ task testCmdArgsCanRun(dependsOn: [compileGroovy, compileTestGroovy]) {
 
 task testIntegrationMain(dependsOn: [compileGroovy, compileTestGroovy]) {
     group = 'my'
-    description = 'test province map.'
+    description = 'test integgration main.'
 
     doFirst {
         String sh = 'groovy -cp out/classes/groovy/main;out/classes/groovy/test; ' +
@@ -62,6 +69,22 @@ task testIntegrationMain(dependsOn: [compileGroovy, compileTestGroovy]) {
                 'test/src/TestIntegrationMain.groovy log'
         Process process = sh.execute()
         logger.log LogLevel.ERROR, process.err.getText('gbk')
-        println "testProvinceMap output:\n${process.in.getText('gbk')}"
+        println "testIntegrationMain output:\n${process.in.getText('gbk')}"
     }
+}
+
+test.dependsOn testIntegrationMain
+
+// application插件
+apply plugin: 'application'
+
+application {
+    mainClassName = 'RunMain'
+}
+
+task runWithJavaExec(type: JavaExec) {
+    dependsOn classes
+    classpath sourceSets.main.runtimeClasspath
+    main = 'RunMain'
+    standardInput = System.in
 }

@@ -3,7 +3,8 @@ import java.util.regex.Pattern
 
 /**
  * InfectStatistic.groovy：耦合度过高的日志处理类、Main调用
- * @author hengyumo* @since 2020-01-31
+ * @author hengyumo
+ * @since 2020-01-31
  */
 
 /**
@@ -34,7 +35,7 @@ enum LogRegex {
             def matcher = line =~ logRex.reg
             if (matcher) return [logRex, matcher]
         }
-        null
+        throw new StatException("不支持的日志格式： $line")
     }
 }
 
@@ -72,12 +73,14 @@ class InfectStatBad {
 
             withDead = { dead ->
                 delegate.ip -= dead
+                delegate.iip -= dead
                 delegate.dead += dead
                 delegate.idead += dead
             }
 
             withCure = { cure ->
                 delegate.ip -= cure
+                delegate.iip -= cure
                 delegate.cure += cure
                 delegate.icure += cure
             }
@@ -103,9 +106,9 @@ class InfectStatBad {
      * @return
      */
     static def handleLogs(String logsPath) {
-        def logs = Logs.readFrom(logsPath)
+        Logs.readFrom(logsPath)
 
-        logs.eachLogLine { date, line ->
+        Logs.eachLogLine { date, line ->
             //noinspection GroovyAssignabilityCheck
             def (LogRegex logRex, Matcher matcher) = LogRegex.match(line)
             // 科里化闭包
@@ -159,7 +162,7 @@ class InfectStatBad {
                     nationwideDailyLog.withEsp(esp)
                     break
                 default:
-                    println "不支持的日志格式： $line"
+                    break
             }
         }
     }
@@ -168,5 +171,6 @@ class InfectStatBad {
 // --------------- 主程序 -------------------
 
 InfectStatBad.extend()
-Main.instance.useLogsHandler('../log', InfectStatBad.&handleLogs)
+CmdExtend.extend()
+Main.instance.useLogsHandler(InfectStatBad.&handleLogs)
 Main.instance.run(args)

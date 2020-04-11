@@ -1,7 +1,7 @@
 /**
  * 测试CmdArgs类
  */
-class TestCmdArgs extends TestBase {
+class TestCmdArgs extends GroovyTestCase {
 
     static def assert1(CmdArgs cmdArgs) {
         assertTrue cmdArgs.cmd == 'list'
@@ -26,7 +26,8 @@ class TestCmdArgs extends TestBase {
     }
 
     void testWithArgStr() {
-        assert1(new CmdArgs('groovy Lib list -date 2020-01-22 -out D:/output.txt -province 福建 浙江', 'groovy Lib'))
+        assert1(new CmdArgs('groovy Lib list -date 2020-01-22 -out D:/output.txt -province 福建 浙江',
+                'groovy Lib'))
         assert1(new CmdArgs('list -date 2020-01-22 -out D:/output.txt -province 福建 浙江'))
     }
 
